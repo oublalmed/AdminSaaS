@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+  ACCOUNTANT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum DocumentType {
+  INVOICE
+  QUOTE
+  CONTRACT
+  ID_DOCUMENT
+  OTHER
+}
+
+enum ReminderChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          Role     @default(EMPLOYEE)
+  tenantId      String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  invoices      Invoice[]
+  quotes        Quote[]
+  documents     Document[]
+  reminders     Reminder[]
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model Tenant {
+  id            String   @id @default(uuid())
+  name          String
+  ice           String?  @unique  // Identifiant Commun de l'Entreprise (Morocco)
+  rc            String?           // Registre de Commerce
+  taxId         String?           // Identifiant Fiscal
+  address       String?
+  city          String?
+  country       String   @default("MA")
+  phone         String?
+  email         String?
+  logo          String?
+  currency      String   @default("MAD")
+  tvaRate       Float    @default(20)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users         User[]
+  clients       Client[]
+  invoices      Invoice[]
+  quotes        Quote[]
+  documents     Document[]
+  reminders     Reminder[]
+}
+
+model Client {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  contactName   String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  country       String   @default("MA")
+  // KYC Morocco & Africa
+  cin           String?  // Carte d'Identité Nationale
+  ice           String?  // Identifiant Commun de l'Entreprise
+  rc            String?  // Registre de Commerce
+  taxId         String?  // Identifiant Fiscal
+  isVerified    Boolean  @default(false)
+  riskScore     Int      @default(0) // 0-100
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  invoices      Invoice[]
+  quotes        Quote[]
+  reminders     Reminder[]
+
+  @@index([tenantId])
+  @@index([ice])
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  tenantId      String
+  clientId      String
+  userId        String
+  number        String
+  date          DateTime      @default(now())
+  dueDate       DateTime
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Float
+  tvaRate       Float         @default(20)
+  tvaAmount     Float
+  total         Float
+  currency      String        @default("MAD")
+  notes         String?       @db.Text
+  items         Json          // Invoice line items as JSON
+  pdfUrl        String?
+  aiGenerated   Boolean       @default(false)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  client        Client        @relation(fields: [clientId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+  reminders     Reminder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model Quote {
+  id            String      @id @default(uuid())
+  tenantId      String
+  clientId      String
+  userId        String
+  number        String
+  date          DateTime    @default(now())
+  validUntil    DateTime
+  status        QuoteStatus @default(DRAFT)
+  subtotal      Float
+  tvaRate       Float       @default(20)
+  tvaAmount     Float
+  total         Float
+  currency      String      @default("MAD")
+  notes         String?     @db.Text
+  items         Json
+  pdfUrl        String?
+  aiGenerated   Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  client        Client      @relation(fields: [clientId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model Document {
+  id            String       @id @default(uuid())
+  tenantId      String
+  userId        String
+  fileName      String
+  fileUrl       String
+  fileSize      Int
+  mimeType      String
+  type          DocumentType @default(OTHER)
+  ocrText       String?      @db.LongText
+  ocrData       Json?        // Structured data extracted by AI
+  isProcessed   Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  tenant        Tenant       @relation(fields: [tenantId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model Reminder {
+  id            String          @id @default(uuid())
+  tenantId      String
+  clientId      String
+  invoiceId     String?
+  userId        String
+  channel       ReminderChannel
+  message       String          @db.Text
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  status        ReminderStatus  @default(PENDING)
+  aiGenerated   Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  client        Client          @relation(fields: [clientId], references: [id])
+  invoice       Invoice?        @relation(fields: [invoiceId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([scheduledAt])
+}
