@@ -63,40 +63,65 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  invoices      Invoice[]
-  quotes        Quote[]
-  documents     Document[]
-  reminders     Reminder[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  invoices          Invoice[]
+  quotes            Quote[]
+  documents         Document[]
+  reminders         Reminder[]
+  tenantAccess      UserTenantAccess[] // Fiduciary: access to multiple tenants
 
   @@index([tenantId])
   @@index([email])
 }
 
-model Tenant {
-  id            String   @id @default(uuid())
-  name          String
-  ice           String?  @unique  // Identifiant Commun de l'Entreprise (Morocco)
-  rc            String?           // Registre de Commerce
-  taxId         String?           // Identifiant Fiscal
-  address       String?
-  city          String?
-  country       String   @default("MA")
-  phone         String?
-  email         String?
-  logo          String?
-  currency      String   @default("MAD")
-  tvaRate       Float    @default(20)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// Fiduciary multi-tenant access: allows one user to manage multiple tenants
+model UserTenantAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      Role     @default(ACCOUNTANT)
+  createdAt DateTime @default(now())
 
-  users         User[]
-  clients       Client[]
-  invoices      Invoice[]
-  quotes        Quote[]
-  documents     Document[]
-  reminders     Reminder[]
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation("ManagedTenants", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model Tenant {
+  id             String   @id @default(uuid())
+  name           String
+  ice            String?  @unique  // Identifiant Commun de l'Entreprise (Morocco)
+  rc             String?           // Registre de Commerce
+  taxId          String?           // Identifiant Fiscal
+  address        String?
+  city           String?
+  country        String   @default("MA")
+  phone          String?
+  email          String?
+  logo           String?
+  currency       String   @default("MAD")
+  tvaRate        Float    @default(20)
+  isActive       Boolean  @default(true)
+  parentTenantId String?  // Fiduciary: parent tenant that manages this one
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  parentTenant   Tenant?  @relation("TenantHierarchy", fields: [parentTenantId], references: [id])
+  childTenants   Tenant[] @relation("TenantHierarchy")
+
+  users          User[]
+  clients        Client[]
+  invoices       Invoice[]
+  quotes         Quote[]
+  documents      Document[]
+  reminders      Reminder[]
+  paymentLinks   PaymentLink[]
+  managedBy      UserTenantAccess[] @relation("ManagedTenants")
+
+  @@index([parentTenantId])
 }
 
 model Client {
@@ -157,6 +182,7 @@ model Invoice {
   client        Client        @relation(fields: [clientId], references: [id])
   user          User          @relation(fields: [userId], references: [id])
   reminders     Reminder[]
+  paymentLinks  PaymentLink[]
 
   @@unique([tenantId, number])
   @@index([tenantId])
@@ -229,6 +255,7 @@ model Reminder {
   userId        String
   channel       ReminderChannel
   message       String          @db.Text
+  paymentLink   String?         // Payment link URL included in the message
   scheduledAt   DateTime
   sentAt        DateTime?
   status        ReminderStatus  @default(PENDING)
@@ -246,5 +273,29 @@ model Reminder {
   @@index([tenantId])
   @@index([status])
   @@index([scheduledAt])
+  @@index([invoiceId])
+}
+
+// Payment Links: allow clients to pay invoices via a unique link
+model PaymentLink {
+  id         String    @id @default(uuid())
+  tenantId   String
+  invoiceId  String
+  token      String    @unique @default(uuid()) // Public token for the link
+  amount     Float
+  currency   String    @default("MAD")
+  expiresAt  DateTime
+  isPaid     Boolean   @default(false)
+  paidAt     DateTime?
+  paidMethod String?   // virement, carte, cash, cheque
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([token])
+  @@index([tenantId])
   @@index([invoiceId])
 }
