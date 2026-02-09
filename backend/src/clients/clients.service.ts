@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
+import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class ClientsService {
@@ -15,7 +16,13 @@ export class ClientsService {
     });
   }
 
-  async findAll(tenantId: string, search?: string) {
+  async findAll(
+    tenantId: string,
+    pagination: PaginationDto,
+    search?: string,
+  ): Promise<PaginatedResult<any>> {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
     const where: any = { tenantId };
     if (search) {
       where.OR = [
@@ -25,10 +32,21 @@ export class ClientsService {
         { cin: { contains: search } },
       ];
     }
-    return this.prisma.client.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+
+    const [data, total] = await Promise.all([
+      this.prisma.client.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.client.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string, tenantId: string) {

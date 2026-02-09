@@ -14,6 +14,7 @@ import { ClientsService } from './clients.service';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('Clients')
 @Controller('clients')
@@ -33,9 +34,10 @@ export class ClientsController {
   @Get()
   findAll(
     @CurrentUser('tenantId') tenantId: string,
+    @Query() pagination: PaginationDto,
     @Query('search') search?: string,
   ) {
-    return this.clientsService.findAll(tenantId, search);
+    return this.clientsService.findAll(tenantId, pagination, search);
   }
 
   @Get('stats')

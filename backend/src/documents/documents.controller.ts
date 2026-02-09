@@ -17,6 +17,7 @@ import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('Documents')
 @Controller('documents')
@@ -49,9 +50,10 @@ export class DocumentsController {
   @Get()
   findAll(
     @CurrentUser('tenantId') tenantId: string,
+    @Query() pagination: PaginationDto,
     @Query('type') type?: string,
   ) {
-    return this.documentsService.findAll(tenantId, type);
+    return this.documentsService.findAll(tenantId, pagination, type);
   }
 
   @Get(':id')

@@ -50,16 +50,18 @@ enum ReminderStatus {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  password      String
-  firstName     String
-  lastName      String
-  role          Role     @default(EMPLOYEE)
-  tenantId      String
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  firstName         String
+  lastName          String
+  role              Role      @default(EMPLOYEE)
+  tenantId          String
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
   invoices      Invoice[]
@@ -85,6 +87,7 @@ model Tenant {
   logo          String?
   currency      String   @default("MAD")
   tvaRate       Float    @default(20)
+  isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -97,7 +100,7 @@ model Tenant {
 }
 
 model Client {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   tenantId      String
   name          String
   contactName   String?
@@ -105,17 +108,18 @@ model Client {
   phone         String?
   address       String?
   city          String?
-  country       String   @default("MA")
+  country       String    @default("MA")
   // KYC Morocco & Africa
-  cin           String?  // Carte d'Identité Nationale
-  ice           String?  // Identifiant Commun de l'Entreprise
-  rc            String?  // Registre de Commerce
-  taxId         String?  // Identifiant Fiscal
-  isVerified    Boolean  @default(false)
-  riskScore     Int      @default(0) // 0-100
-  notes         String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  cin           String?   // Carte d'Identite Nationale
+  ice           String?   // Identifiant Commun de l'Entreprise
+  rc            String?   // Registre de Commerce
+  taxId         String?   // Identifiant Fiscal
+  isVerified    Boolean   @default(false)
+  riskScore     Int       @default(0) // 0-100
+  notes         String?   @db.Text
+  lastContactAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
   invoices      Invoice[]
@@ -124,6 +128,7 @@ model Client {
 
   @@index([tenantId])
   @@index([ice])
+  @@index([tenantId, name])
 }
 
 model Invoice {
@@ -157,6 +162,8 @@ model Invoice {
   @@index([tenantId])
   @@index([clientId])
   @@index([status])
+  @@index([dueDate])
+  @@index([tenantId, createdAt])
 }
 
 model Quote {
@@ -187,6 +194,8 @@ model Quote {
   @@unique([tenantId, number])
   @@index([tenantId])
   @@index([clientId])
+  @@index([status])
+  @@index([tenantId, createdAt])
 }
 
 model Document {
@@ -209,6 +218,7 @@ model Document {
 
   @@index([tenantId])
   @@index([type])
+  @@index([tenantId, createdAt])
 }
 
 model Reminder {
@@ -223,6 +233,8 @@ model Reminder {
   sentAt        DateTime?
   status        ReminderStatus  @default(PENDING)
   aiGenerated   Boolean         @default(false)
+  retryCount    Int             @default(0)
+  failureReason String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -234,4 +246,5 @@ model Reminder {
   @@index([tenantId])
   @@index([status])
   @@index([scheduledAt])
+  @@index([invoiceId])
 }

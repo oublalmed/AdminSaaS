@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { AiService } from '../ai/ai.service';
+import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 import {
   CreateInvoiceDto,
   UpdateInvoiceDto,
@@ -16,12 +17,16 @@ export class InvoicesService {
     private aiService: AiService,
   ) {}
 
+  private async getTenant(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return tenant;
+  }
+
   // --- Invoices ---
 
   async createInvoice(dto: CreateInvoiceDto, userId: string, tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
+    const tenant = await this.getTenant(tenantId);
     const tvaRate = dto.tvaRate ?? tenant.tvaRate ?? 20;
     const currency = dto.currency ?? tenant.currency ?? 'MAD';
 
@@ -54,14 +59,27 @@ export class InvoicesService {
     });
   }
 
-  async findAllInvoices(tenantId: string, status?: string) {
+  async findAllInvoices(tenantId: string, pagination: PaginationDto, status?: string): Promise<PaginatedResult<any>> {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
     const where: any = { tenantId };
     if (status) where.status = status;
-    return this.prisma.invoice.findMany({
-      where,
-      include: { client: true },
-      orderBy: { createdAt: 'desc' },
-    });
+
+    const [data, total] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where,
+        include: { client: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOneInvoice(id: string, tenantId: string) {
@@ -74,7 +92,7 @@ export class InvoicesService {
   }
 
   async updateInvoice(id: string, dto: UpdateInvoiceDto, tenantId: string) {
-    await this.findOneInvoice(id, tenantId);
+    const existing = await this.findOneInvoice(id, tenantId);
     const data: any = { ...dto };
 
     if (dto.items) {
@@ -82,8 +100,7 @@ export class InvoicesService {
         (sum, item) => sum + item.quantity * item.unitPrice,
         0,
       );
-      const invoice = await this.prisma.invoice.findUnique({ where: { id } });
-      const tvaAmount = subtotal * (invoice.tvaRate / 100);
+      const tvaAmount = subtotal * (existing.tvaRate / 100);
       data.subtotal = subtotal;
       data.tvaAmount = tvaAmount;
       data.total = subtotal + tvaAmount;
@@ -120,9 +137,7 @@ export class InvoicesService {
     });
     if (!client) throw new NotFoundException('Client not found');
 
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
+    const tenant = await this.getTenant(tenantId);
 
     const aiResult = await this.aiService.generateInvoice({
       clientName: client.name,
@@ -168,9 +183,7 @@ export class InvoicesService {
   // --- Quotes ---
 
   async createQuote(dto: CreateQuoteDto, userId: string, tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
+    const tenant = await this.getTenant(tenantId);
     const tvaRate = dto.tvaRate ?? tenant.tvaRate ?? 20;
     const currency = dto.currency ?? tenant.currency ?? 'MAD';
 
@@ -203,14 +216,27 @@ export class InvoicesService {
     });
   }
 
-  async findAllQuotes(tenantId: string, status?: string) {
+  async findAllQuotes(tenantId: string, pagination: PaginationDto, status?: string): Promise<PaginatedResult<any>> {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
     const where: any = { tenantId };
     if (status) where.status = status;
-    return this.prisma.quote.findMany({
-      where,
-      include: { client: true },
-      orderBy: { createdAt: 'desc' },
-    });
+
+    const [data, total] = await Promise.all([
+      this.prisma.quote.findMany({
+        where,
+        include: { client: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.quote.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOneQuote(id: string, tenantId: string) {
@@ -223,7 +249,7 @@ export class InvoicesService {
   }
 
   async updateQuote(id: string, dto: UpdateQuoteDto, tenantId: string) {
-    await this.findOneQuote(id, tenantId);
+    const existing = await this.findOneQuote(id, tenantId);
     const data: any = { ...dto };
 
     if (dto.items) {
@@ -231,8 +257,7 @@ export class InvoicesService {
         (sum, item) => sum + item.quantity * item.unitPrice,
         0,
       );
-      const quote = await this.prisma.quote.findUnique({ where: { id } });
-      const tvaAmount = subtotal * (quote.tvaRate / 100);
+      const tvaAmount = subtotal * (existing.tvaRate / 100);
       data.subtotal = subtotal;
       data.tvaAmount = tvaAmount;
       data.total = subtotal + tvaAmount;

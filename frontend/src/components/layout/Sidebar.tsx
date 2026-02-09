@@ -28,6 +28,7 @@ const navItems = [
   { href: '/dashboard/documents', label: 'Documents', icon: FolderOpen },
   { href: '/dashboard/reminders', label: 'Relances', icon: Bell },
   { href: '/dashboard/ai-chat', label: 'Assistant IA', icon: MessageSquare },
+  { href: '/dashboard/settings', label: 'Parametres', icon: Settings },
 ];
 
 export default function Sidebar({ onClose, onLogout }: SidebarProps) {
