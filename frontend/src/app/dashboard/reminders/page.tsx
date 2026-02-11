@@ -3,16 +3,14 @@
 import { useState, useEffect } from 'react';
 import {
   Bell,
-  Plus,
   Sparkles,
   Trash2,
   X,
   Mail,
   MessageCircle,
   Phone,
-  CheckCircle,
-  Clock,
-  AlertCircle,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Reminder, Client, Invoice } from '@/types';
@@ -35,11 +33,13 @@ export default function RemindersPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAiForm, setShowAiForm] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [aiForm, setAiForm] = useState({
     clientId: '',
     invoiceId: '',
     channel: 'EMAIL' as 'EMAIL' | 'WHATSAPP' | 'SMS',
     language: 'fr',
+    includePaymentLink: true,
   });
 
   const loadReminders = () => {
@@ -59,13 +59,16 @@ export default function RemindersPage() {
 
   const handleAiGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setGenerating(true);
     try {
       await api.aiGenerateReminder(aiForm);
       setShowAiForm(false);
-      setAiForm({ clientId: '', invoiceId: '', channel: 'EMAIL', language: 'fr' });
+      setAiForm({ clientId: '', invoiceId: '', channel: 'EMAIL', language: 'fr', includePaymentLink: true });
       loadReminders();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -169,8 +172,33 @@ export default function RemindersPage() {
                   <option value="SMS">SMS</option>
                 </select>
               </div>
-              <button type="submit" className="btn-primary w-full">
-                Generer la relance
+
+              {/* Payment Link Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4 text-primary-600" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Lien de paiement</p>
+                    <p className="text-xs text-gray-500">Inclure un lien pour payer en ligne</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiForm({ ...aiForm, includePaymentLink: !aiForm.includePaymentLink })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    aiForm.includePaymentLink ? 'bg-primary-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      aiForm.includePaymentLink ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <button type="submit" disabled={generating} className="btn-primary w-full">
+                {generating ? 'Generation en cours...' : 'Generer la relance'}
               </button>
             </form>
           </div>
@@ -220,6 +248,20 @@ export default function RemindersPage() {
                       <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded">
                         {reminder.message}
                       </p>
+                      {reminder.paymentLink && (
+                        <div className="flex items-center gap-1.5 mt-2 text-xs text-primary-600">
+                          <Link2 className="h-3 w-3" />
+                          <a
+                            href={reminder.paymentLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline flex items-center gap-1"
+                          >
+                            Lien de paiement
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-400 mt-1">
                         Planifiee:{' '}
                         {new Date(reminder.scheduledAt).toLocaleString('fr-FR')}

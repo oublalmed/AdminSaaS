@@ -20,6 +20,7 @@ export class RemindersService {
         userId,
         channel: dto.channel,
         message: dto.message || '',
+        paymentLink: dto.paymentLink,
         scheduledAt: new Date(dto.scheduledAt),
       },
       include: { client: true, invoice: true },
@@ -41,7 +42,34 @@ export class RemindersService {
       (Date.now() - invoice.dueDate.getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    const message = await this.aiService.generateReminderMessage({
+    // Generate or retrieve payment link
+    let paymentLinkUrl: string | undefined;
+    if (dto.includePaymentLink) {
+      const existingLink = await this.prisma.paymentLink.findFirst({
+        where: { invoiceId: invoice.id, isPaid: false, expiresAt: { gt: new Date() } },
+      });
+
+      if (existingLink) {
+        const appUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        paymentLinkUrl = `${appUrl}/pay/${existingLink.token}`;
+      } else {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        const newLink = await this.prisma.paymentLink.create({
+          data: {
+            tenantId,
+            invoiceId: invoice.id,
+            amount: invoice.total,
+            currency: invoice.currency,
+            expiresAt,
+          },
+        });
+        const appUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        paymentLinkUrl = `${appUrl}/pay/${newLink.token}`;
+      }
+    }
+
+    let message = await this.aiService.generateReminderMessage({
       clientName: invoice.client.name,
       invoiceNumber: invoice.number,
       amount: invoice.total,
@@ -51,6 +79,10 @@ export class RemindersService {
       channel: dto.channel,
       language: dto.language,
     });
+
+    if (paymentLinkUrl) {
+      message += `\n\nLien de paiement: ${paymentLinkUrl}`;
+    }
 
     const scheduledAt = new Date();
     scheduledAt.setHours(scheduledAt.getHours() + 1);
@@ -63,6 +95,7 @@ export class RemindersService {
         userId,
         channel: dto.channel,
         message,
+        paymentLink: paymentLinkUrl,
         scheduledAt,
         aiGenerated: true,
       },
@@ -94,7 +127,6 @@ export class RemindersService {
     return this.prisma.reminder.delete({ where: { id } });
   }
 
-  // Cron job: check and send pending reminders every 15 minutes
   @Cron(CronExpression.EVERY_MINUTE)
   async processPendingReminders() {
     const pendingReminders = await this.prisma.reminder.findMany({
@@ -116,13 +148,16 @@ export class RemindersService {
         console.error(`Failed to send reminder ${reminder.id}:`, error);
         await this.prisma.reminder.update({
           where: { id: reminder.id },
-          data: { status: 'FAILED' },
+          data: {
+            status: reminder.retryCount >= 3 ? 'FAILED' : 'PENDING',
+            retryCount: { increment: 1 },
+            failureReason: error.message || 'Unknown error',
+          },
         });
       }
     }
   }
 
-  // Cron job: auto-create reminders for overdue invoices daily at 9 AM
   @Cron('0 9 * * *')
   async autoCreateReminders() {
     const overdueInvoices = await this.prisma.invoice.findMany({
@@ -157,6 +192,20 @@ export class RemindersService {
             channel: 'EMAIL',
           });
 
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30);
+          const paymentLink = await this.prisma.paymentLink.create({
+            data: {
+              tenantId: invoice.tenantId,
+              invoiceId: invoice.id,
+              amount: invoice.total,
+              currency: invoice.currency,
+              expiresAt,
+            },
+          });
+          const appUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const paymentUrl = `${appUrl}/pay/${paymentLink.token}`;
+
           await this.prisma.reminder.create({
             data: {
               tenantId: invoice.tenantId,
@@ -164,13 +213,13 @@ export class RemindersService {
               invoiceId: invoice.id,
               userId: invoice.userId,
               channel: 'EMAIL',
-              message,
+              message: `${message}\n\nLien de paiement: ${paymentUrl}`,
+              paymentLink: paymentUrl,
               scheduledAt: new Date(),
               aiGenerated: true,
             },
           });
 
-          // Update invoice status to OVERDUE
           await this.prisma.invoice.update({
             where: { id: invoice.id },
             data: { status: 'OVERDUE' },
@@ -183,7 +232,6 @@ export class RemindersService {
   }
 
   private async sendReminder(reminder: any) {
-    // In production, integrate with actual email/SMS/WhatsApp providers
     switch (reminder.channel) {
       case 'EMAIL':
         console.log(`[EMAIL] To: ${reminder.client.email} | ${reminder.message}`);

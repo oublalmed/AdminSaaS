@@ -10,6 +10,7 @@ import {
   Eye,
   CheckCircle,
   Clock,
+  Camera,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Document } from '@/types';
@@ -35,6 +36,7 @@ export default function DocumentsPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const loadDocuments = () => {
     setLoading(true);
@@ -62,6 +64,7 @@ export default function DocumentsPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   };
 
@@ -79,7 +82,27 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-        <div>
+        <div className="flex items-center gap-2">
+          {/* Camera capture - visible on mobile */}
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleUpload}
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+          />
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploading}
+            className="btn-primary flex items-center gap-2 sm:hidden"
+            title="Prendre une photo"
+          >
+            <Camera className="h-4 w-4" />
+            Photo
+          </button>
+
+          {/* File upload */}
           <input
             type="file"
             ref={fileInputRef}
@@ -96,6 +119,25 @@ export default function DocumentsPage() {
             {uploading ? 'Upload...' : 'Telecharger'}
           </button>
         </div>
+      </div>
+
+      {/* Mobile quick-capture banner */}
+      <div className="sm:hidden card bg-primary-50 border-primary-200">
+        <button
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={uploading}
+          className="w-full flex items-center gap-3 text-left"
+        >
+          <div className="p-3 bg-primary-100 rounded-lg">
+            <Camera className="h-6 w-6 text-primary-700" />
+          </div>
+          <div>
+            <p className="font-medium text-primary-900">Capture rapide</p>
+            <p className="text-xs text-primary-600">
+              Photographiez une facture ou un bon pour OCR automatique
+            </p>
+          </div>
+        </button>
       </div>
 
       {/* Type filter */}

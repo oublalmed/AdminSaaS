@@ -4,6 +4,7 @@ export interface User {
   firstName: string;
   lastName: string;
   role: 'ADMIN' | 'EMPLOYEE' | 'ACCOUNTANT';
+  isMultiTenant?: boolean;
 }
 
 export interface Tenant {
@@ -13,6 +14,8 @@ export interface Tenant {
   rc?: string;
   currency: string;
   tvaRate: number;
+  isPrimary?: boolean;
+  city?: string;
 }
 
 export interface AuthResponse {
@@ -101,6 +104,7 @@ export interface Reminder {
   id: string;
   channel: 'EMAIL' | 'WHATSAPP' | 'SMS';
   message: string;
+  paymentLink?: string;
   scheduledAt: string;
   sentAt?: string;
   status: 'PENDING' | 'SENT' | 'FAILED';
@@ -130,4 +134,81 @@ export interface DashboardData {
   };
   cashflow: Array<{ month: string; total: number; paid: number }>;
   clientsAtRisk: Array<{ name: string; amount: number }>;
+}
+
+export interface AgingBucket {
+  label: string;
+  amount: number;
+  count: number;
+  invoices: Array<{
+    id: string;
+    number: string;
+    client: string;
+    total: number;
+    currency: string;
+    dueDate: string;
+    daysOverdue: number;
+  }>;
+}
+
+export interface AgingData {
+  totalOutstanding: number;
+  buckets: AgingBucket[];
+  clientBreakdown: Array<{
+    name: string;
+    current: number;
+    days31_60: number;
+    days61_90: number;
+    over90: number;
+    total: number;
+  }>;
+  dso: number;
+}
+
+export interface PaymentLinkData {
+  token: string;
+  amount: number;
+  currency: string;
+  isPaid: boolean;
+  isExpired: boolean;
+  expiresAt: string;
+  invoice: {
+    number: string;
+    date: string;
+    dueDate: string;
+    items: InvoiceItem[];
+    subtotal: number;
+    tvaRate: number;
+    tvaAmount: number;
+    total: number;
+    client: { name: string; ice?: string };
+  };
+  company: {
+    name: string;
+    ice?: string;
+    rc?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+  };
+}
+
+export interface ConsolidatedDashboard {
+  global: {
+    totalRevenue: number;
+    totalOverdue: number;
+    totalInvoices: number;
+    totalClients: number;
+    tenantCount: number;
+  };
+  tenants: Array<{
+    tenantId: string;
+    tenantName: string;
+    totalRevenue: number;
+    totalOverdue: number;
+    totalInvoices: number;
+    paidCount: number;
+    overdueCount: number;
+  }>;
 }

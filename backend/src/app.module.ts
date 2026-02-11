@@ -10,10 +10,10 @@ import { DocumentsModule } from './documents/documents.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AiModule } from './ai/ai.module';
+import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
   imports: [
-    // Rate limiting: 60 requests per minute per IP
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -24,6 +24,7 @@ import { AiModule } from './ai/ai.module';
     RemindersModule,
     DashboardModule,
     AiModule,
+    TenantsModule,
   ],
   providers: [
     {

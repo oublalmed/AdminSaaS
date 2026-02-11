@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsBoolean } from 'class-validator';
 import { ReminderChannel } from '@prisma/client';
 
 export class CreateReminderDto {
@@ -15,6 +15,10 @@ export class CreateReminderDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentLink?: string;
 
   @IsDateString()
   scheduledAt: string;
@@ -33,4 +37,8 @@ export class AiGenerateReminderDto {
   @IsOptional()
   @IsString()
   language?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  includePaymentLink?: boolean;
 }

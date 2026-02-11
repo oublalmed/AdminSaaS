@@ -15,4 +15,9 @@ export class DashboardController {
   getFinance(@CurrentUser('tenantId') tenantId: string) {
     return this.dashboardService.getFinanceDashboard(tenantId);
   }
+
+  @Get('aging')
+  getAging(@CurrentUser('tenantId') tenantId: string) {
+    return this.dashboardService.getAgingReceivables(tenantId);
+  }
 }

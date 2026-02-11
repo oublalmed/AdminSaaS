@@ -14,6 +14,8 @@ import { Response } from 'express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { InvoicesService } from './invoices.service';
 import { PdfService } from './pdf.service';
+import { ExportService } from './export.service';
+import { PaymentLinkService } from './payment-link.service';
 import {
   CreateInvoiceDto,
   UpdateInvoiceDto,
@@ -34,6 +36,8 @@ export class InvoicesController {
   constructor(
     private invoicesService: InvoicesService,
     private pdfService: PdfService,
+    private exportService: ExportService,
+    private paymentLinkService: PaymentLinkService,
     private prisma: PrismaService,
   ) {}
 
@@ -55,6 +59,38 @@ export class InvoicesController {
     @Query('status') status?: string,
   ) {
     return this.invoicesService.findAllInvoices(tenantId, pagination, status);
+  }
+
+  @Get('invoices/export/csv')
+  async exportCSV(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: string,
+    @Res() res?: Response,
+  ) {
+    const csv = await this.exportService.exportCSV(tenantId, { startDate, endDate, status });
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="export-factures-${new Date().toISOString().split('T')[0]}.csv"`,
+    });
+    res.send('\ufeff' + csv);
+  }
+
+  @Get('invoices/export/fec')
+  async exportFEC(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: string,
+    @Res() res?: Response,
+  ) {
+    const fec = await this.exportService.exportFEC(tenantId, { startDate, endDate, status });
+    res.set({
+      'Content-Type': 'text/tab-separated-values; charset=utf-8',
+      'Content-Disposition': `attachment; filename="FEC-${new Date().toISOString().split('T')[0]}.txt"`,
+    });
+    res.send('\ufeff' + fec);
   }
 
   @Get('invoices/:id')
@@ -96,6 +132,19 @@ export class InvoicesController {
       'Content-Length': pdf.length,
     });
     res.end(pdf);
+  }
+
+  @Post('invoices/:id/payment-link')
+  createPaymentLink(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+  ) {
+    return this.paymentLinkService.createPaymentLink(id, tenantId);
+  }
+
+  @Get('payment-links')
+  getPaymentLinks(@CurrentUser('tenantId') tenantId: string) {
+    return this.paymentLinkService.getPaymentLinks(tenantId);
   }
 
   @Put('invoices/:id')

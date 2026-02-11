@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -110,6 +111,50 @@ export class AuthService {
     };
   }
 
+  // Switch active tenant (for fiduciary users managing multiple companies)
+  async switchTenant(userId: string, currentTenantId: string, targetTenantId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: true },
+    });
+    if (!user) throw new UnauthorizedException();
+
+    if (targetTenantId !== user.tenantId) {
+      const access = await this.prisma.userTenantAccess.findUnique({
+        where: { userId_tenantId: { userId, tenantId: targetTenantId } },
+      });
+      if (!access) throw new ForbiddenException('Acces non autorise a ce tenant');
+    }
+
+    const targetTenant = await this.prisma.tenant.findUnique({
+      where: { id: targetTenantId },
+    });
+    if (!targetTenant || !targetTenant.isActive) {
+      throw new ForbiddenException('Tenant inactif ou introuvable');
+    }
+
+    const token = this.generateToken(userId, user.email, user.role, targetTenantId);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+      tenant: {
+        id: targetTenant.id,
+        name: targetTenant.name,
+        ice: targetTenant.ice,
+        rc: targetTenant.rc,
+        currency: targetTenant.currency,
+        tvaRate: targetTenant.tvaRate,
+      },
+      token,
+    };
+  }
+
   async addUser(dto: AddUserDto, tenantId: string) {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -147,12 +192,17 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException();
 
+    const managedTenantCount = await this.prisma.userTenantAccess.count({
+      where: { userId },
+    });
+
     return {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
+      isMultiTenant: managedTenantCount > 0,
       tenant: {
         id: user.tenant.id,
         name: user.tenant.name,

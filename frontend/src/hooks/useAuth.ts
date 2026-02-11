@@ -50,5 +50,14 @@ export function useAuth() {
     window.location.href = '/auth/login';
   }, []);
 
-  return { user, tenant, loading, login, register, logout };
+  // Used by tenant switcher to update auth state without full reload
+  const setAuth = useCallback((data: AuthResponse) => {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem('tenant', JSON.stringify(data.tenant));
+    setUser(data.user);
+    setTenant(data.tenant);
+  }, []);
+
+  return { user, tenant, loading, login, register, logout, setAuth };
 }
